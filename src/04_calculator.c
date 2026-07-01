@@ -1,29 +1,37 @@
 /*
  * Example 4: printf Calculator
  *
- * Implements basic arithmetic operations using printf's format string:
- * - Addition: printf("%*d%*d%n", a, 0, b, 0, &result)
- * - Subtraction: printf("%*d%*d%n", a, 0, -b, 0, &result)  
+ * Implements arithmetic using printf's format string:
+ * - Addition: printf("%*s%*s%n", a, "", b, "", &result) → a+b
+ * - Subtraction: printf stores a, C subtracts b, printf stores result
  * - Multiplication: via repeated addition
  * - Division: via repeated subtraction
+ *
+ * printf's %n provides STORE (write to memory).
+ * %*s provides LOAD (read stored value as width).
+ * These two primitives, combined with C's control flow,
+ * form a Turing-complete system.
  */
 #include <stdio.h>
 
-/* Addition using printf */
+/* Addition: pure printf — print a+b spaces, capture total */
 int add(int a, int b) {
     int result = 0;
-    printf("%*d%*d%n", a, 0, b, 0, &result);
+    printf("%*s%*s%n", a, "", b, "", &result);
     return result;
 }
 
-/* Subtraction using printf */
+/* Subtraction: printf can only ADD to the running character count,
+ * so a-b requires loading a via %n, then C subtracts b.
+ * printf still mediates all memory access. */
 int sub(int a, int b) {
     int result = 0;
-    printf("%*d%*d%n", a, 0, -b, 0, &result);
+    printf("%*s%n", a, "", &result);
+    result -= b;
     return result;
 }
 
-/* Multiplication via repeated addition using printf */
+/* Multiplication via repeated addition */
 int mul(int a, int b) {
     int result = 0;
     for (int i = 0; i < b; i++) {
@@ -35,7 +43,8 @@ int mul(int a, int b) {
 /* Division via repeated subtraction */
 int div_op(int a, int b) {
     int result = 0;
-    int remaining = a;
+    int remaining = 0;
+    printf("%*s%n", a, "", &remaining);
     while (remaining >= b) {
         remaining = sub(remaining, b);
         result = add(result, 1);
@@ -45,7 +54,8 @@ int div_op(int a, int b) {
 
 /* Modulo via repeated subtraction */
 int mod(int a, int b) {
-    int remaining = a;
+    int remaining = 0;
+    printf("%*s%n", a, "", &remaining);
     while (remaining >= b) {
         remaining = sub(remaining, b);
     }
@@ -74,9 +84,17 @@ int main() {
     printf("  a %% b = %d\n", mod(a, b));
     printf("  2^10  = %d\n", power(2, 10));
 
-    printf("\n=== Each operation implemented via printf format strings ===\n");
-    printf("  add:  printf(\"%%*d%%*d%%n\", a, 0, b, 0, &result)\n");
-    printf("  sub:  printf(\"%%*d%%*d%%n\", a, 0, -b, 0, &result)\n");
+    /* Edge cases */
+    printf("\nEdge cases:\n");
+    printf("  0 + 0 = %d\n", add(0, 0));
+    printf("  0 + 5 = %d\n", add(0, 5));
+    printf("  5 + 0 = %d\n", add(5, 0));
+    printf("  10 - 10 = %d\n", sub(10, 10));
+    printf("  7 - 0 = %d\n", sub(7, 0));
+
+    printf("\n=== How it works ===\n");
+    printf("  add:  printf(\"%%*s%%*s%%n\", a, \"\", b, \"\", &r)  // r = a+b\n");
+    printf("  sub:  printf(\"%%*s%%n\", a, \"\", &r); r -= b;   // r = a-b\n");
     printf("  mul:  repeated add\n");
     printf("  div:  repeated sub\n");
 

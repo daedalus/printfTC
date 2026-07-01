@@ -33,8 +33,8 @@ int main() {
     printf("  a = %d (was 10, printed 10 chars for width, total = 10+10 = 20)\n", a);
 
     printf("\n=== Key insight: printf is an ALU ===\n");
-    printf("  - Width specifiers (%*d) use values as parameters\n");
-    printf("  - %n writes results back to memory\n");
+    printf("  - Width specifiers (%%*d) use values as parameters\n");
+    printf("  - %%n writes results back to memory\n");
     printf("  - This is a read-modify-write cycle\n");
 
     return 0;
