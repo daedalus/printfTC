@@ -49,15 +49,15 @@ Requires `gcc` with C11 support.
 | 1 | `src/01_counter.c` | Basic `%n` — writing character count to memory |
 | 2 | `src/02_two_counter.c` | Minsky machine (2-counter machine, proven Turing complete) |
 | 3 | `src/03_fibonacci.c` | Iterative Fibonacci via printf addition |
-| 4 | `src/04_calculator.c` | Full ALU: add, subtract, multiply, divide, modulo, power |
+| 4 | `src/04_calculator.c` | ALU: add (pure printf), sub (printf + C), mul, div, mod, pow |
 | 5 | `src/05_conditional.c` | Conditional logic: min, max, abs, sign |
 | 6 | `src/06_state_machine.c` | Finite automaton recognizing {a^n b^n | n >= 0} |
-| 7 | `src/07_pointer_arithmetic.c` | Array/matrix operations via printf |
-| 8 | `src/08_self_modifying.c` | Dynamic format strings and an interpreter |
+| 7 | `src/07_pointer_arithmetic.c` | Array init, sum, and 2x2 matrix multiply via printf |
+| 8 | `src/08_self_modifying.c` | Dynamic format strings and a data-driven interpreter |
 | 9 | `src/09_memory_simulation.c` | CPU simulator: registers, RAM, ALU, instruction cycle |
 | 10 | `src/10_ackermann.c` | Ackermann function (non-primitive-recursive) |
 | 11 | `src/11_turing_machine.c` | Binary increment Turing machine |
-| 12 | `src/12_lambda_calculus.c` | Church numerals, arithmetic, booleans, Y combinator |
+| 12 | `src/12_lambda_calculus.c` | Church numerals, SUCC/ADD/MULT/EXP/PRED/SUB, booleans, fib |
 | 13 | `src/13_formal_proof.c` | Brainfuck interpreter (minimal Turing-complete language) |
 | 14 | `src/14_universal_machine.c` | Universal Turing machine (transition table as data) |
 | 15 | `src/15_complex_example.c` | 4-element sorting network |
@@ -67,19 +67,25 @@ Requires `gcc` with C11 support.
 ### Arithmetic via `%n`
 
 ```c
-// Addition: a + b
+// Addition: print a+b spaces, capture total with %n
 int sum = 0;
 printf("%*s%*s%n", a, "", b, "", &sum);
 
-// Subtraction: a - b
+// Subtraction: load a via %n, then C subtracts b
+// (printf can only ADD to the running character count,
+//  so subtraction requires C's arithmetic operator)
 int diff = 0;
-printf("%*s%*s%n", a, "", -b, "", &diff);
+printf("%*s%n", a, "", &diff);
+diff -= b;
 
 // Multiplication: repeated addition
 int product = 0;
 for (int i = 0; i < b; i++)
     product = add(product, a);
 ```
+
+Note: `%*d` with value 0 prints `"0"` (1 character), causing an off-by-one.
+Always use `%*s` with `""` to print exactly N characters.
 
 ### Memory Access via `%n`
 
@@ -98,6 +104,12 @@ int symbol = tape[head];
 // Transition: write new state via printf
 printf("%*s%n", new_state, "", &state);
 ```
+
+### Pitfalls
+
+- **Use `%*s`, not `%*d`**: `printf("%*d", 0, 0)` prints `"0"` (1 char), breaking zero-operand cases. `printf("%*s", 0, "")` prints nothing (0 chars).
+- **Single call for accumulation**: `%n` captures the count of *that* printf call only. Looping `printf("%*s", n, "")` then `printf("%n", &x)` gives x=0. Combine into one call: `printf("%*s%*s%*s%n", a, "", b, "", c, "", &x)`.
+- **Negative width ≠ subtraction**: Per the C standard, a negative `%*` argument means left-justify with `abs(width)`. It does not shrink output. Subtraction requires C's `-=` operator after loading via `%n`.
 
 ## Computational Hierarchy
 
