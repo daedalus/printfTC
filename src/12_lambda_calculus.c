@@ -54,10 +54,10 @@ int church_exp(int base, int exp) {
     return result;
 }
 
-/* Church predecessor: PRED(n) = n-1 */
+/* Church predecessor: PRED(n) = max(0, n-1) */
 int church_pred(int n) {
     if (n == 0) return 0;
-    return apply_n_times(-1, n);
+    return n - 1;
 }
 
 /* Church subtraction: SUB(m)(n) = m - n */

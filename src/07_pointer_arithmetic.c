@@ -16,11 +16,10 @@ int main() {
     printf("=== Pointer Arithmetic with printf ===\n\n");
 
     /* Initialize array using printf */
-    /* array[0] = 10, array[1] = 20, ..., array[9] = 100 */
+    /* array[i] = (i+1)*10 by printing that many chars and storing via %n */
     for (int i = 0; i < 10; i++) {
         int *target = ptr + i;
-        /* Print exactly (i+1)*10 characters, store count in target */
-        printf("%*d%n", (i + 1) * 10, 0, target);
+        printf("%*s%n", (i + 1) * 10, "", target);
     }
 
     printf("Array contents:\n  ");
@@ -31,11 +30,12 @@ int main() {
     printf("\n\n");
 
     /* Sum all elements using printf */
+    /* Must be a single printf call — %n captures that call's char count */
     int sum = 0;
-    for (int i = 0; i < 10; i++) {
-        printf("%*d", array[i], 0);
-    }
-    printf("%n", &sum);
+    printf("%*s%*s%*s%*s%*s%*s%*s%*s%*s%*s%n",
+           array[0], "", array[1], "", array[2], "", array[3], "", array[4], "",
+           array[5], "", array[6], "", array[7], "", array[8], "", array[9], "",
+           &sum);
     printf("Sum of array (via printf): %d\n", sum);
 
     /* Matrix multiplication simulation */
@@ -51,11 +51,10 @@ int main() {
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
             int cell_sum = 0;
-            for (int k = 0; k < 2; k++) {
-                int product = 0;
-                printf("%*d", A[i][k] * B[k][j], 0);
-            }
-            printf("%n", &cell_sum);
+            printf("%*s%*s%n",
+                   A[i][0] * B[0][j], "",
+                   A[i][1] * B[1][j], "",
+                   &cell_sum);
             C[i][j] = cell_sum;
         }
     }
