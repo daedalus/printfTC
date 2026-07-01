@@ -1,15 +1,29 @@
 # Turing Completeness of C printf
 
-printf in C is **Turing complete**. This is not just a theoretical curiosity —
-it has practical implications for security (format string vulnerabilities)
-and demonstrates the surprising computational power hidden in standard library
-functions.
+Does `printf` have enough computational power to be Turing complete on its own?
+The answer is nuanced, and this repository explores exactly where the boundary
+lies.
 
-This repository contains 15 C programs proving this through the `%n` format
-specifier, which writes the number of characters printed so far to an arbitrary
-memory location.
+## The Honest Claim
 
-## The Core Mechanism
+**printf the format-string language is not Turing complete.** It has no loop
+constructs, no conditionals, and no ability to call itself. A single `printf()`
+call parses its format string left-to-right exactly once.
+
+**But `%n` changes everything.** It writes an attacker-controlled value to an
+arbitrary address. When that address is a return address or function pointer,
+the format string hijacks control flow — and suddenly the format string *is*
+the program. This is not hypothetical; it is exactly how real exploits work.
+
+This repository demonstrates both sides:
+
+| Claim | Status | Examples |
+|-------|--------|----------|
+| "printf + C is TC" | Proven (trivially — C is already TC) | #1–#15 |
+| "printf alone is TC" | Requires `%n` to hijack control flow | #16 |
+| "`%n` enables arbitrary write" | Proven — the real security finding | #1, #4, #7, #9 |
+
+## What `%n` Actually Provides
 
 ```c
 int sum = 0;
@@ -17,18 +31,19 @@ printf("%*s%*s%n", a, "", b, "", &sum);  // sum = a + b
 ```
 
 `%*s` prints exactly N spaces (when the string is `""`), and `%n` writes the
-cumulative character count to `sum`. This creates a **read-modify-write cycle**
-— the ALU of our printf computer.
+cumulative character count to `sum`. This is a **read-modify-write cycle**:
 
-## The Three Requirements for Turing Completeness
+| Primitive | Mechanism | Limitation |
+|-----------|-----------|-----------|
+| LOAD | `%*s` reads stored value as width | Only as format-string width arg |
+| STORE | `%n` writes char count to any `int*` | Can only add to running count |
+| Addition | Concatenate two `%*s` in one call | Works — pure printf |
+| Subtraction | Cannot be done by printf alone | Requires C's `-=` after LOAD |
+| Branching | Not in the format string language | Requires C's `if`/`else` |
+| Looping | Not in the format string language | Requires C's `for`/`while` |
 
-A system is Turing complete if it can simulate any Turing machine. This requires:
-
-| Requirement | printf mechanism |
-|------------|------------------|
-| Conditional branching | C's `if`/`else`/`switch` |
-| Arbitrary memory access | `%n` writes to any `int*` pointer |
-| Unbounded iteration | C's `while`/`for` loops |
+printf's `%n` is a **memory bus**, not an ALU. It provides the read/write
+primitives. Arithmetic and control flow come from C.
 
 ## Building and Running
 
@@ -37,43 +52,50 @@ make all          # compile all examples
 make clean        # remove binaries
 
 ./01_counter      # run individual example
-./09_memory_simulation
+./16_self Interpreter
 ```
 
-Requires `gcc` with C11 support.
+Requires `gcc` with C11 support. Example #16 requires a non-NX stack
+(disable ASLR and exec-stack for testing: `execstack -s ./16_self`).
 
 ## Examples
+
+### Printf + C (demonstrate printf's memory primitives)
 
 | # | File | What it demonstrates |
 |---|------|----------------------|
 | 1 | `src/01_counter.c` | Basic `%n` — writing character count to memory |
-| 2 | `src/02_two_counter.c` | Minsky machine (2-counter machine, proven Turing complete) |
+| 2 | `src/02_two_counter.c` | Minsky machine (2-counter, proven TC via C loops) |
 | 3 | `src/03_fibonacci.c` | Iterative Fibonacci via printf addition |
 | 4 | `src/04_calculator.c` | ALU: add (pure printf), sub (printf + C), mul, div, mod, pow |
 | 5 | `src/05_conditional.c` | Conditional logic: min, max, abs, sign |
 | 6 | `src/06_state_machine.c` | Finite automaton recognizing {a^n b^n | n >= 0} |
-| 7 | `src/07_pointer_arithmetic.c` | Array init, sum, and 2x2 matrix multiply via printf |
+| 7 | `src/07_pointer_arithmetic.c` | Array init, sum, and 2x2 matrix multiply |
 | 8 | `src/08_self_modifying.c` | Dynamic format strings and a data-driven interpreter |
-| 9 | `src/09_memory_simulation.c` | CPU simulator: registers, RAM, ALU, instruction cycle |
+| 9 | `src/09_memory_simulation.c` | CPU simulator: registers, RAM, instruction cycle |
 | 10 | `src/10_ackermann.c` | Ackermann function (non-primitive-recursive) |
 | 11 | `src/11_turing_machine.c` | Binary increment Turing machine |
 | 12 | `src/12_lambda_calculus.c` | Church numerals, SUCC/ADD/MULT/EXP/PRED/SUB, booleans, fib |
-| 13 | `src/13_formal_proof.c` | Brainfuck interpreter (minimal Turing-complete language) |
+| 13 | `src/13_formal_proof.c` | Brainfuck interpreter (minimal TC language) |
 | 14 | `src/14_universal_machine.c` | Universal Turing machine (transition table as data) |
 | 15 | `src/15_complex_example.c` | 4-element sorting network |
+
+### Pure format-string TC (via `%n` control-flow hijack)
+
+| # | File | What it demonstrates |
+|---|------|----------------------|
+| 16 | `src/16_self_interpreter.c` | Format string that interprets itself via `%n` return-address overwrite |
 
 ## How It Works
 
 ### Arithmetic via `%n`
 
 ```c
-// Addition: print a+b spaces, capture total with %n
+// Addition: pure printf — print a+b spaces, capture total
 int sum = 0;
 printf("%*s%*s%n", a, "", b, "", &sum);
 
-// Subtraction: load a via %n, then C subtracts b
-// (printf can only ADD to the running character count,
-//  so subtraction requires C's arithmetic operator)
+// Subtraction: printf loads a via %n, C subtracts b
 int diff = 0;
 printf("%*s%n", a, "", &diff);
 diff -= b;
@@ -95,30 +117,41 @@ int *cell = &ram[address];
 printf("%*s%n", value, "", cell);  // ram[address] = value
 ```
 
-### State Transitions
+### The Control-Flow Hijack (what makes it truly TC)
 
-```c
-int state = 0;
-// Read symbol from tape
-int symbol = tape[head];
-// Transition: write new state via printf
-printf("%*s%n", new_state, "", &state);
+A single `printf(input)` call where `input` is attacker-controlled can use `%n`
+to overwrite the return address on the stack, jumping execution back to the
+printf call. The format string then modifies its own arguments (or the program
+state) before the next iteration. This creates a loop without any C `for`/`while`:
+
 ```
+printf(input)  →  %n overwrites return addr  →  jumps back to printf
+    →  %n modifies program state  →  %n overwrites return addr again  →  ...
+```
+
+This is the mechanism behind real format-string exploits and is the only
+path to genuine Turing completeness for printf alone.
 
 ### Pitfalls
 
 - **Use `%*s`, not `%*d`**: `printf("%*d", 0, 0)` prints `"0"` (1 char), breaking zero-operand cases. `printf("%*s", 0, "")` prints nothing (0 chars).
-- **Single call for accumulation**: `%n` captures the count of *that* printf call only. Looping `printf("%*s", n, "")` then `printf("%n", &x)` gives x=0. Combine into one call: `printf("%*s%*s%*s%n", a, "", b, "", c, "", &x)`.
-- **Negative width ≠ subtraction**: Per the C standard, a negative `%*` argument means left-justify with `abs(width)`. It does not shrink output. Subtraction requires C's `-=` operator after loading via `%n`.
+- **Single call for accumulation**: `%n` captures the count of *that* printf call only. Looping separate printf calls then capturing gives the last call's count (0), not the accumulated total. Combine into one call.
+- **Negative width ≠ subtraction**: Per the C standard, a negative `%*` argument means left-justify with `abs(width)`. It does not shrink output.
 
 ## Computational Hierarchy
 
 ```
-printf + C
+printf alone (no %n hijack)
     |
-    | simulates
+    | can only: load, store, add (one pass, no loops)
     v
-Minsky Machine (2-counter) --- proven Turing complete (Minsky, 1967)
+Finite-state transducer  ← NOT Turing complete
+
+printf + C control flow
+    |
+    | can: load, store, add, subtract, branch, loop
+    v
+Minsky Machine (2-counter) --- proven TC (Minsky, 1967)
     |
     | simulates
     v
@@ -127,77 +160,52 @@ Turing Machine
     | equivalent to
     v
 Lambda Calculus
+
+printf with %n return-address hijack
+    |
+    | can: load, store, add, branch, loop (all in format string)
+    v
+Turing complete (architecture-specific)
 ```
+
+## What the 15+1 Examples Prove
+
+| Model | Example | Control flow source |
+|-------|---------|-------------------|
+| Finite automaton | #6 | C `if`/`else` |
+| Minsky machine | #2 | C `for` loop |
+| Turing machine | #11 | C `while` loop |
+| Universal TM | #14 | C loop + switch |
+| Lambda calculus | #12 | C recursion |
+| Brainfuck | #13 | C `while` loop |
+| CPU | #9 | C `switch` + loop |
+| Self-interpreter | #16 | **`%n` hijacks return address** |
+
+The first 15 examples prove that printf's memory primitives are sufficient for
+TC *when combined with C's control flow*. Example #16 attempts to close the gap
+by eliminating C control flow entirely, using `%n` to hijack the instruction
+pointer directly.
+
+## Security Implications
+
+The `%n` write primitive is the root cause of **format string vulnerabilities**:
+
+- `%n` can write to arbitrary memory addresses
+- Attackers control the value written (character count, manipulated via width specifiers)
+- This enables return-address overwrites, GOT hijacking, and arbitrary code execution
+
+The Turing completeness angle is not just academic — it explains *why* format
+string bugs are so dangerous. The same mechanism that could (in theory) make
+printf a complete computer makes it an exploitation vector.
+
+**Defense**: never pass user input as a printf format string.
 
 ## Historical Context
 
 - **1967**: Minsky proved 2-counter machines are Turing complete
 - **2000s**: Security researchers discovered `%n` enables arbitrary memory writes
-- **2013**: Phrack article "Exploiting format strings" demonstrated practical attacks
+- **2001**: Phrack article "Exploiting Format String Vulnerabilities"
 - **2020s**: Academic papers formalized printf's computational power
-
-## Security Implications
-
-The Turing completeness of `%n` is the root cause of **format string vulnerabilities**:
-
-- `%n` can write to arbitrary memory addresses
-- Attackers control the value written (character count)
-- This enables buffer overflows, return address overwrites, and arbitrary code execution
-
-**Defense**: never pass user input as a printf format string.
-
-## Conclusions
-
-### printf is Turing complete
-
-The `%n` format specifier provides a **STORE primitive** — it writes the
-character count to any `int*` pointer. Combined with `%*s` (which provides a
-**LOAD primitive** by reading stored values as width specifiers), printf gives
-us arbitrary memory access. With C's control flow providing branching and
-iteration, the system satisfies all three requirements for Turing completeness.
-
-### What printf can (and can't) do
-
-| Operation | Mechanism | Works? |
-|-----------|-----------|--------|
-| Addition | `printf("%*s%*s%n", a, "", b, "", &sum)` | Yes — pure printf |
-| Subtraction | Load via `%n`, then C's `-=` | printf can only add to the running count |
-| Store to memory | `printf("%*s%n", val, "", &ptr)` | Yes |
-| Read from memory | `printf("%*s", stored_val, "")` | Yes — used as width specifier |
-| Conditional | C's `if`/`else` | Yes — via surrounding C code |
-
-printf's `%n` is a **memory bus**, not an ALU. It provides the read/write
-primitives that make the system complete, while C supplies the arithmetic and
-control flow. This mirrors real computer architecture: memory + CPU = Turing
-complete.
-
-### What the 15 examples prove
-
-| Model | Example | Significance |
-|-------|---------|-------------|
-| Finite automaton | #6 state machine | Recognizes {a^n b^n} |
-| Minsky machine | #2 two-counter | Proven Turing complete (Minsky, 1967) |
-| Turing machine | #11 binary increment | Tape + head + state transitions |
-| Universal TM | #14 UTM | Transition table as data — simulates any TM |
-| Lambda calculus | #12 Church numerals | SUCC, ADD, MULT, EXP, PRED, SUB |
-| Brainfuck | #13 interpreter | Minimal Turing-complete language |
-| CPU | #9 simulation | Registers, RAM, instruction cycle |
-
-The chain is: **printf → Minsky machine → Turing machine → lambda calculus**.
-Each link is a known equivalence or simulation result. The UTM (#14) is the
-strongest single proof — it takes a transition table as input data and simulates
-it, demonstrating that printf can interpret arbitrary computation.
-
-### Security implications are real
-
-The Turing completeness of `%n` is exactly why format string vulnerabilities
-work. An attacker who controls the format string controls:
-
-- **What gets written** (the character count, manipulated via width specifiers)
-- **Where it gets written** (any address supplied as a `%n` argument)
-
-This is arbitrary write — the same primitive that makes printf Turing complete
-makes it exploitable.
 
 ## References
 
