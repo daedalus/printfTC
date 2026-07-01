@@ -1,5 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11
+SRC = src
 
 EXAMPLES = 01_counter 02_two_counter 03_fibonacci 04_calculator 05_conditional \
            06_state_machine 07_pointer_arithmetic 08_self_modifying \
@@ -9,7 +10,7 @@ EXAMPLES = 01_counter 02_two_counter 03_fibonacci 04_calculator 05_conditional \
 
 all: $(EXAMPLES)
 
-%: %.c
+%: $(SRC)/%.c
 	$(CC) $(CFLAGS) -o $@ $<
 
 clean:
