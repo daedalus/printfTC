@@ -146,6 +146,59 @@ The Turing completeness of `%n` is the root cause of **format string vulnerabili
 
 **Defense**: never pass user input as a printf format string.
 
+## Conclusions
+
+### printf is Turing complete
+
+The `%n` format specifier provides a **STORE primitive** — it writes the
+character count to any `int*` pointer. Combined with `%*s` (which provides a
+**LOAD primitive** by reading stored values as width specifiers), printf gives
+us arbitrary memory access. With C's control flow providing branching and
+iteration, the system satisfies all three requirements for Turing completeness.
+
+### What printf can (and can't) do
+
+| Operation | Mechanism | Works? |
+|-----------|-----------|--------|
+| Addition | `printf("%*s%*s%n", a, "", b, "", &sum)` | Yes — pure printf |
+| Subtraction | Load via `%n`, then C's `-=` | printf can only add to the running count |
+| Store to memory | `printf("%*s%n", val, "", &ptr)` | Yes |
+| Read from memory | `printf("%*s", stored_val, "")` | Yes — used as width specifier |
+| Conditional | C's `if`/`else` | Yes — via surrounding C code |
+
+printf's `%n` is a **memory bus**, not an ALU. It provides the read/write
+primitives that make the system complete, while C supplies the arithmetic and
+control flow. This mirrors real computer architecture: memory + CPU = Turing
+complete.
+
+### What the 15 examples prove
+
+| Model | Example | Significance |
+|-------|---------|-------------|
+| Finite automaton | #6 state machine | Recognizes {a^n b^n} |
+| Minsky machine | #2 two-counter | Proven Turing complete (Minsky, 1967) |
+| Turing machine | #11 binary increment | Tape + head + state transitions |
+| Universal TM | #14 UTM | Transition table as data — simulates any TM |
+| Lambda calculus | #12 Church numerals | SUCC, ADD, MULT, EXP, PRED, SUB |
+| Brainfuck | #13 interpreter | Minimal Turing-complete language |
+| CPU | #9 simulation | Registers, RAM, instruction cycle |
+
+The chain is: **printf → Minsky machine → Turing machine → lambda calculus**.
+Each link is a known equivalence or simulation result. The UTM (#14) is the
+strongest single proof — it takes a transition table as input data and simulates
+it, demonstrating that printf can interpret arbitrary computation.
+
+### Security implications are real
+
+The Turing completeness of `%n` is exactly why format string vulnerabilities
+work. An attacker who controls the format string controls:
+
+- **What gets written** (the character count, manipulated via width specifiers)
+- **Where it gets written** (any address supplied as a `%n` argument)
+
+This is arbitrary write — the same primitive that makes printf Turing complete
+makes it exploitable.
+
 ## References
 
 1. Minsky, M. (1967). *Computation: Finite and Infinite Machines*. Prentice-Hall.
